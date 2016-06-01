@@ -54,7 +54,8 @@ function varargout = optimizer(varargin)
     cst = cellfun(@(x) strcmpi(x,'cst'),{data.type});
     aux = cellfun(@(x) strcmpi(x,'aux'),{data.type});
     obj = cellfun(@(x) strcmpi(x,'obj'),{data.type});
-    eqn = logical(cst+aux+obj);
+    eqn = cst|aux|obj;
+
     % Row Numbers of Variables to use to update the spreadsheet
     nums = 1:length({data.type});
     row_nums = nums(strcmpi({data.type},'var'))+4;
@@ -175,25 +176,68 @@ function varargout = optimizer(varargin)
     
     %% Self Organized Mapping 
     if som
-        som_vars = arrayfun(@(ll,ul) linspace(ll,ul,10),...
+        som_vars = arrayfun(@(ll,ul) linspace(ll,ul,floor((3e7)^(1/sum(var)))),...
             [data(var).LL],[data(var).UL],'UniformOutput',false);
         
         % Replace *,/,^ with matrix style
         reps = {'*','/','^';'.*','./','.^'};
         fns = cellfun(@char,eqns,'UniformOutput',false);
+        lls = cellfun(@num2str,{data.LL},'UniformOutput',false);
+        uls = cellfun(@num2str,{data.UL},'UniformOutput',false);
         for i = 1:3
             fns = strrep(fns,reps{1,i},reps{2,i});
+            lls = strrep(lls,reps{1,i},reps{2,i});
+            uls = strrep(uls,reps{1,i},reps{2,i});            
         end
         eqns = fns;
-        [X1,X2,X3,X4] = ndgrid(som_vars{:});
-        % Evaluate all functions at all values of x
-        matrix = cellfun(@eval,eqns,'UniformOutput',false);
-        temp = cellfun(@(a) reshape(a,numel(X1),1),matrix,'UniformOutput',false);
-        temp = cell2mat(temp);
-        matrix = reshape(temp',length(temp)/length(eqns),length(eqns));
+        [data(:).LL] = lls{:};
+        [data(:).UL] = uls{:};
+        % Create ND grid
+        [nd_vars{1:sum(var)}]=ndgrid(som_vars{:});
+        %[X1,X2,X3,X4] = ndgrid(som_vars{:});
+        % Unpack Variables
+        for i = 1:sum(var)
+            eval(strcat('X',num2str(i),'= nd_vars{',num2str(i),'};'));
+        end
+        % Evaluate all cst or obj functions at all values of x
+        matrix = cellfun(@eval,eqns(cst(eqn)|obj(eqn)),'UniformOutput',false);
+        lleqns = ids_ll(eqn); lleqns = lleqns(cst(eqn)|obj(eqn));
+        uleqns = ids_ul(eqn); uleqns = uleqns(cst(eqn)|obj(eqn));
+        % Remove values outside constraints
+        ind1 = cellfun(@(a,b) a>=eval(num2str(b)),...
+            matrix(lleqns),{data((obj|cst)&ids_ll).LL}',...
+            'UniformOutput',false);
+        ind2 = cellfun(@(a,b) a<=eval(num2str(b)),...
+            matrix(uleqns),{data((obj|cst)&ids_ul).UL}',...
+            'UniformOutput',false);
+        ind = [ind1(:);ind2(:)];
+        inds = true(size(ind{1}));
+
+        for i = 1:length(ind)
+%             disp(sum(reshape(ind{i},1,numel(ind{i}))));
+            inds = ind{i}&inds;
+%             disp(sum(reshape(inds,1,numel(inds))));
+        end
+        if sum(reshape(inds,1,numel(inds)))<1
+            disp('No options left');
+            return
+        end
+        % Add our variables to the matrix (we'll want to "see" these too)
+        nvar = sum(var);
+        neqn = sum(cst(eqn)|obj(eqn));
+        for i = 1:nvar
+            matrix{end+1}=nd_vars{i};
+        end
+        for i = 1:length(matrix)
+            matrix{i}(~inds)= [];
+        end
+%         temp = cellfun(@(a) reshape(a,numel(nd_vars{1}),1),matrix,'UniformOutput',false);
+        matrix = cell2mat(matrix)';
+%         matrix = reshape(temp',length(temp)/(nvar+neqn),nvar+neqn);
+        
         % Som Toolbox
         Icol = (1:numel(matrix(:,1)))';
-        Struct.comp_names = eqn_names;
+        Struct.comp_names = [eqn_names(cst(eqn)|obj(eqn));var_names(:)];
         Struct.labels = cellstr(num2str(Icol));
         Struct.label_names = {'Matrix Index'};
         Struct.data = matrix;
@@ -204,7 +248,25 @@ function varargout = optimizer(varargin)
         labeltype = 'add1';
         sM = som_make(sD,'mapsize',mpsize);
         sM = som_autolabel(sM,sD,labeltype);
-        h1 = som_show(sM,'comp',1:8,'norm','d');
+        
+        figure
+        fh(1) = som_show(sM,'comp',1:4,'norm','d');
+        lab = som_show_add('label',sM,'subplot','all');
+%         set(lab,'Color','white')
+        
+        figure
+        fh(2) = som_show(sM,'comp',5:6,'norm','d');
+        lab = som_show_add('label',sM,'subplot','all');
+%         set(lab,'Color','white')
+        
+        figure
+        fh(3) = som_show(sM,'comp',7:10,'norm','d');
+        lab = som_show_add('label',sM,'subplot','all');
+%         set(lab,'Color','white')
+        
+        linkaxes(findobj('Type','Axes'),'xy');
+        varargout{1}=matrix;
+        return
     end
     
     %% Create function from string
@@ -267,8 +329,8 @@ function varargout = optimizer(varargin)
         'fmincon',...
         'Algorithm','interior-point',...
         'Display',display,...
-        'MaxFunEvals',300e3,...
-        'MaxIter',80e3,...
+        'MaxFunEvals',500e3,...
+        'MaxIter',100e3,...
         'TolCon',1e-3);
 
 
