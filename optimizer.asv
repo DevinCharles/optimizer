@@ -198,13 +198,6 @@ function varargout = optimizer(varargin)
         Struct.label_names = {'Matrix Index'};
         Struct.data = matrix;
         som_write_data(Struct,'SpringSOM.data');
-        sD = som_read_data('SpringSOM.data');
-        sD = som_normalize(sD,'var');
-        mpsize = 'big';
-        labeltype = 'add1';
-        sM = som_make(sD,'mapsize',mpsize);
-        sM = som_autolabel(sM,sD,labeltype);
-        h1 = som_show(sM,'comp',1:8,'norm','d');
     end
     
     %% Create function from string
