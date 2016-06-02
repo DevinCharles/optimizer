@@ -33,6 +33,7 @@ function varargout = optimizer(varargin)
         addOptional(p,'update',false);
         addOptional(p,'iterations',false);
         addOptional(p,'SOM',false);
+        addOptional(p,'SOM_size',1e5);
         
         parse(p,varargin{:})
         
@@ -41,6 +42,7 @@ function varargout = optimizer(varargin)
         update = p.Results.update;
         iter_on = p.Results.iterations;
         som = p.Results.SOM;
+        som_sz = p.Results.SOM_size;
     end
     try
         rows = importData(fname);
@@ -176,7 +178,7 @@ function varargout = optimizer(varargin)
     
     %% Self Organized Mapping 
     if som
-        som_vars = arrayfun(@(ll,ul) linspace(ll,ul,floor((3e7)^(1/sum(var)))),...
+        som_vars = arrayfun(@(ll,ul) linspace(ll,ul,floor((som_sz)^(1/sum(var)))),...
             [data(var).LL],[data(var).UL],'UniformOutput',false);
         
         % Replace *,/,^ with matrix style
@@ -217,9 +219,13 @@ function varargout = optimizer(varargin)
 %             disp(sum(reshape(ind{i},1,numel(ind{i}))));
             inds = ind{i}&inds;
 %             disp(sum(reshape(inds,1,numel(inds))));
+%             disp(' ');
         end
         if sum(reshape(inds,1,numel(inds)))<1
-            disp('No options left');
+            disp('No options left.')
+            disp('Are you attempting to maximize your objective by ')
+            disp('(multiplying by -1) and it''s missing it''s bounds?')
+            varargout{1}=[];
             return
         end
         % Add our variables to the matrix (we'll want to "see" these too)
@@ -249,20 +255,8 @@ function varargout = optimizer(varargin)
         sM = som_make(sD,'mapsize',mpsize);
         sM = som_autolabel(sM,sD,labeltype);
         
-        figure
-        fh(1) = som_show(sM,'comp',1:4,'norm','d');
-        lab = som_show_add('label',sM,'subplot','all');
-%         set(lab,'Color','white')
-        
-        figure
-        fh(2) = som_show(sM,'comp',5:6,'norm','d');
-        lab = som_show_add('label',sM,'subplot','all');
-%         set(lab,'Color','white')
-        
-        figure
-        fh(3) = som_show(sM,'comp',7:10,'norm','d');
-        lab = som_show_add('label',sM,'subplot','all');
-%         set(lab,'Color','white')
+        nmat = length(matrix);
+        drawCompPlanes(sM,nvar,neqn,nmat)
         
         linkaxes(findobj('Type','Axes'),'xy');
         varargout{1}=matrix;
@@ -376,6 +370,47 @@ function varargout = optimizer(varargin)
     varargout{3} = cell2struct(bse_funs,eqn_names,1);
 
 end
+
+function drawCompPlanes(sM,nvar,neqn,nmat)
+    ntot = (neqn+nvar);
+    % Variable Component Planes in 2x2 Layout
+    for fig=1:ceil(ntot/4)
+        figure
+        if fig == ceil(ntot/4)
+            fh(fig) = som_show(sM,'comp',4*fig-3:ntot,'norm','d');
+            if nmat <= 50
+                lab = som_show_add('label',sM,'subplot','all');
+        %         set(lab,'Color','white')
+            end
+        else
+            fh(fig) = som_show(sM,'comp',4*fig-3:4*fig,'norm','d');
+            if nmat <= 50
+                lab = som_show_add('label',sM,'subplot','all');
+        %         set(lab,'Color','white')
+            end
+        end
+    end
+    nfig=fig;
+    
+%     % Equation Component Planes in 2x2 Layout
+%     for fig=1:ceil(neqn/4)
+%         figure
+%         if fig == ceil(neqn/4)
+%             fh(nfig+fig) = som_show(sM,'comp',nfig+4*fig-3:neqn,'norm','d');
+%             if nmat <= 50
+%                 lab = som_show_add('label',sM,'subplot','all');
+%         %         set(lab,'Color','white')
+%             end
+%         else
+%             fh(nfig+fig) = som_show(sM,'comp',nfig+4*fig-3:nfig+4*fig,'norm','d');
+%             if nmat <= 50
+%                 lab = som_show_add('label',sM,'subplot','all');
+%         %         set(lab,'Color','white')
+%             end
+%         end
+%     end
+end
+
 
 function rows = importData(varargin)
     global data
