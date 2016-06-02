@@ -3,6 +3,7 @@ Thumbs.db
 ehthumbs.db
 # Matlab Backup
 *.asv
+*.data
 
 # Folder config file
 Desktop.ini
