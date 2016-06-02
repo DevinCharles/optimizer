@@ -163,15 +163,18 @@ function varargout = optimizer(varargin)
         end
         
         % Print Changed UL & LL
-        disp('-----------------')
-        disp(' Limits Swapping ')
-        disp('-----------------')
-        for j = 1:length({data.LL})
-            if ~isnumeric(data(j).LL)
-                fprintf('%s = %s\n',strcat(data(j).name,' LL'),char(data(j).LL))
-            end
-            if ~isnumeric(data(j).UL)
-                fprintf('%s = %s\n',strcat(data(j).name,' UL'),char(data(j).UL))
+        if ~som
+            disp('-----------------')
+            disp(' Limits Swapping ')
+            disp('-----------------')
+        
+            for j = 1:length({data.LL})
+                if ~isnumeric(data(j).LL)
+                    fprintf('%s = %s\n',strcat(data(j).name,' LL'),char(data(j).LL))
+                end
+                if ~isnumeric(data(j).UL)
+                    fprintf('%s = %s\n',strcat(data(j).name,' UL'),char(data(j).UL))
+                end
             end
         end
     end
@@ -206,25 +209,53 @@ function varargout = optimizer(varargin)
         lleqns = ids_ll(eqn); lleqns = lleqns(cst(eqn)|obj(eqn));
         uleqns = ids_ul(eqn); uleqns = uleqns(cst(eqn)|obj(eqn));
         % Remove values outside constraints
+        lls = {data((obj|cst)&ids_ll).LL}';
+        uls = {data((obj|cst)&ids_ul).UL}';
+        ll_names = {data((obj|cst)&ids_ll).name};
+        ul_names = {data((obj|cst)&ids_ul).name};
+        lim_names = [ll_names(:);ul_names(:)];
+        
         ind1 = cellfun(@(a,b) a>=eval(num2str(b)),...
-            matrix(lleqns),{data((obj|cst)&ids_ll).LL}',...
-            'UniformOutput',false);
+            matrix(lleqns),lls,'UniformOutput',false);
         ind2 = cellfun(@(a,b) a<=eval(num2str(b)),...
-            matrix(uleqns),{data((obj|cst)&ids_ul).UL}',...
-            'UniformOutput',false);
+            matrix(uleqns),uls,'UniformOutput',false);
         ind = [ind1(:);ind2(:)];
-        inds = true(size(ind{1}));
-
+        inds = true(size(ind{1}));     
+        
         for i = 1:length(ind)
-%             disp(sum(reshape(ind{i},1,numel(ind{i}))));
+            inds_old = inds;
             inds = ind{i}&inds;
-%             disp(sum(reshape(inds,1,numel(inds))));
-%             disp(' ');
+            if verbose
+                if i > length(ind1)
+                    str = ul_names{i-length(ind1)};
+                    lim = uls{i-length(ind1)};
+                    sgn = '<';
+                else
+                    str = ll_names{i};
+                    lim = lls{i};
+                    sgn = '>';
+                end
+                matsz = sum(reshape(ind{i},1,numel(ind{i})));
+                totsz = sum(reshape(inds,1,numel(inds)));
+                fprintf(['\n%s %s %s has %i unique solutions\n'...
+                    '%i total unique solutions left.\n'],...
+                    str,sgn,lim,matsz,totsz);
+                if totsz == 0
+                    num = find(strcmpi(lim_names{i},{data((obj|cst)).name}));
+                    if strcmpi(sgn,'>')
+                        cls = max(reshape(matrix{num}(inds_old),1,...
+                            numel(matrix{num}(inds_old))));
+                    else
+                        cls = min(reshape(matrix{num}(inds_old),1,...
+                            numel(matrix{num}(inds_old))));
+                    end
+                    fprintf('\nThe closest value to %s %s %s is %1.3f\n',...
+                        str,sgn,lim,cls);
+                    break
+                end
+            end
         end
         if sum(reshape(inds,1,numel(inds)))<1
-            disp('No options left.')
-            disp('Are you attempting to maximize your objective by ')
-            disp('(multiplying by -1) and it''s missing it''s bounds?')
             varargout{1}=[];
             return
         end
@@ -247,8 +278,8 @@ function varargout = optimizer(varargin)
         Struct.labels = cellstr(num2str(Icol));
         Struct.label_names = {'Matrix Index'};
         Struct.data = matrix;
-        som_write_data(Struct,'SpringSOM.data');
-        sD = som_read_data('SpringSOM.data');
+        som_write_data(Struct,'optimizerSOM.data');
+        sD = som_read_data('optimizerSOM.data');
         sD = som_normalize(sD,'var');
         mpsize = 'big';
         labeltype = 'add1';
