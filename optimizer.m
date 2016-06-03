@@ -19,7 +19,8 @@ function varargout = optimizer(varargin)
 %     Devin C Prescott
 %     devin.c.prescott@gmail.com
 %% Usage
-% [data,x,eqns]=optimizer('verbose',false,'update',true);
+% [Table] = optimizer('mode','discrete','fname',fname,'disc_size',1e7,'update',true);
+% [data,x,eqns] = optimizer('mode','optimize','verbose',true,'update',true);
 %% Data Shared Across Functions
     global data
     %% Input Data
@@ -32,8 +33,9 @@ function varargout = optimizer(varargin)
         addOptional(p,'verbose',false);
         addOptional(p,'update',false);
         addOptional(p,'iterations',false);
+        addOptional(p,'mode','discrete');
+        addOptional(p,'disc_size',1e5);
         addOptional(p,'SOM',false);
-        addOptional(p,'SOM_size',1e5);
         
         parse(p,varargin{:})
         
@@ -41,8 +43,17 @@ function varargout = optimizer(varargin)
         verbose = p.Results.verbose;
         update = p.Results.update;
         iter_on = p.Results.iterations;
-        som = p.Results.SOM;
-        som_sz = p.Results.SOM_size;
+        fn_mode = p.Results.mode;
+        disc_sz = p.Results.disc_size;
+        SOM = p.Results.SOM;
+        
+        switch fn_mode
+            case 'discrete'
+                disc = true;
+            case 'optimize'
+                disc = false;
+        end
+            
     end
     try
         rows = importData(fname);
@@ -98,7 +109,7 @@ function varargout = optimizer(varargin)
         eqns{j} = subs(eqns{j},{data(con).name},[data(con).value]);
         for i = 1:sum(var)
             % This is the variable we swap all other variables with: x(i)
-            if ~som
+            if ~disc
                 swap_var = strcat('x(',num2str(i),')');
             else
                 swap_var = strcat('X',num2str(i));
@@ -116,7 +127,6 @@ function varargout = optimizer(varargin)
         end
     end
     
-        
     % Check in Lower and Upper Limits for Strings
     for j = 1:length({data.LL})
         if ischar(data(j).LL)
@@ -127,7 +137,7 @@ function varargout = optimizer(varargin)
             % Replace variables with the string x(j)
             for i = 1:sum(var)
                 % This is the variable we swap all other variables with: x(i)
-                if ~som
+                if ~disc
                     swap_var = strcat('x(',num2str(i),')');
                 else
                     swap_var = strcat('X',num2str(i));
@@ -143,7 +153,7 @@ function varargout = optimizer(varargin)
             % Replace variables with the string x(j)
             for i = 1:sum(var)
                 % This is the variable we swap all other variables with: x(i)
-                if ~som
+                if ~disc
                     swap_var = strcat('x(',num2str(i),')');
                 else
                     swap_var = strcat('X',num2str(i));
@@ -163,7 +173,7 @@ function varargout = optimizer(varargin)
         end
         
         % Print Changed UL & LL
-        if ~som
+        if ~disc
             disp('-----------------')
             disp(' Limits Swapping ')
             disp('-----------------')
@@ -179,9 +189,9 @@ function varargout = optimizer(varargin)
         end
     end
     
-    %% Self Organized Mapping 
-    if som
-        som_vars = arrayfun(@(ll,ul) linspace(ll,ul,floor((som_sz)^(1/sum(var)))),...
+    %% Discrete Matrix Calculations 
+    if disc
+        disc_vars = arrayfun(@(ll,ul) linspace(ll,ul,floor((disc_sz)^(1/sum(var)))),...
             [data(var).LL],[data(var).UL],'UniformOutput',false);
         
         % Replace *,/,^ with matrix style
@@ -198,8 +208,8 @@ function varargout = optimizer(varargin)
         [data(:).LL] = lls{:};
         [data(:).UL] = uls{:};
         % Create ND grid
-        [nd_vars{1:sum(var)}]=ndgrid(som_vars{:});
-        %[X1,X2,X3,X4] = ndgrid(som_vars{:});
+        [nd_vars{1:sum(var)}]=ndgrid(disc_vars{:});
+        %[X1,X2,X3,X4] = ndgrid(disc_vars{:});
         % Unpack Variables
         for i = 1:sum(var)
             eval(strcat('X',num2str(i),'= nd_vars{',num2str(i),'};'));
@@ -259,7 +269,7 @@ function varargout = optimizer(varargin)
             varargout{1}=[];
             return
         end
-        % Add our variables to the matrix (we'll want to "see" these too)
+        % Add our variables to the matrix (we'll want to see these too)
         nvar = sum(var);
         neqn = sum(cst(eqn)|obj(eqn));
         for i = 1:nvar
@@ -268,29 +278,46 @@ function varargout = optimizer(varargin)
         for i = 1:length(matrix)
             matrix{i}(~inds)= [];
         end
-%         temp = cellfun(@(a) reshape(a,numel(nd_vars{1}),1),matrix,'UniformOutput',false);
         matrix = cell2mat(matrix)';
-%         matrix = reshape(temp',length(temp)/(nvar+neqn),nvar+neqn);
         
-        % Som Toolbox
+        % Self Organized Maps - SOM Toolbox
         Icol = (1:numel(matrix(:,1)))';
-        Struct.comp_names = [eqn_names(cst(eqn)|obj(eqn));var_names(:)];
-        Struct.labels = cellstr(num2str(Icol));
-        Struct.label_names = {'Matrix Index'};
-        Struct.data = matrix;
-        som_write_data(Struct,'optimizerSOM.data');
-        sD = som_read_data('optimizerSOM.data');
-        sD = som_normalize(sD,'var');
-        mpsize = 'big';
-        labeltype = 'add1';
-        sM = som_make(sD,'mapsize',mpsize);
-        sM = som_autolabel(sM,sD,labeltype);
+        IcolStr = cellstr(num2str(Icol));
+        if SOM
+            
+            Struct.comp_names = [eqn_names(cst(eqn)|obj(eqn));var_names(:)];
+            Struct.labels = IcolStr;
+            Struct.label_names = {'Matrix Index'};
+            Struct.data = matrix;
+            som_write_data(Struct,'optimizerDisc.data');
+            sD = som_read_data('optimizerDisc.data');
+            sD = som_normalize(sD,'var');
+            mpsize = 'big';
+            labeltype = 'add1';
+            sM = som_make(sD,'mapsize',mpsize);
+            sM = som_autolabel(sM,sD,labeltype);
+
+            nmat = length(matrix);
+            drawCompPlanes(sM,nvar,neqn,nmat)
+
+            linkaxes(findobj('Type','Axes'),'xy');
+        end
         
-        nmat = length(matrix);
-        drawCompPlanes(sM,nvar,neqn,nmat)
+        % Create Data Table
+        tab = array2table(...
+            matrix,...
+            'VariableNames',[eqn_names(cst(eqn)|obj(eqn));var_names(:)],...
+            'RowNames',IcolStr);
+    
+        varargout{1}=tab;
         
-        linkaxes(findobj('Type','Axes'),'xy');
-        varargout{1}=matrix;
+        if update
+            writetable(...
+                tab,fname,...
+                'Sheet',2,...
+                'WriteRowNames',true)
+        end
+        
         return
     end
     
