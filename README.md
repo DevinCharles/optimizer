@@ -1,10 +1,10 @@
 # optimizer
 
-Optimizer is a wrapper function for *fmincon* and the *[SOM-Toolbox](https://github.com/ilarinieminen/SOM-Toolbox).* It's primary goal is to make optimization more easily accesible and intuitive for everyone. 
+Optimizer is a wrapper function for *fmincon* and the *[SOM-Toolbox](https://github.com/ilarinieminen/SOM-Toolbox).* It's primary goal is to make optimization easily accesible and intuitive for everyone. 
 
 The function gets its all its input from a simple excel spreadsheet where you layout your design variables with initial values and bounds, constants, auxilary equations (equations that might make up your constraints or objective function), your constraint functions, and your objective function. There is a blank template included, and a sample file to show how things work.
 
-If you're human, and are unsure where to start your initial values at, there is a handy *discrete* mode, which will solve all your constraint equations and your objective function over your bounds over a discrete matrix, so you can get an idea of where to start.
+If you're human, and are unsure where to start your initial values, there is a handy *discrete* mode, which will solve all your constraint equations and your objective function over your bounds over a discrete matrix, so you can get an idea of where to start.
 
 If you're still human, and staring at a large matrix of numbers leaves you stumped, you can make use of the Self-Organizing Maps toolbox written by Esa Alhoniemi, Johan Himberg, Jukka Parviainen and Juha Vesanto. This will visually direct you to a good set of initial conditions, or even a "good enough" solution.
 
